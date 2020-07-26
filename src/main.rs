@@ -25,6 +25,7 @@ fn guess_to_index(guess: &String) -> u8 {
 
 fn prompt(msg: &str) {
     let prompt = ">";
+    println!("{}", BANNER);
     print!("{} {}: ", prompt, msg);
     io::stdout().flush().unwrap();
 }
@@ -67,7 +68,6 @@ fn main() {
 
     while !solved && misses < max_misses {
         guess.clear();
-        println!("{}", BANNER);
         prompt("Guess any letter");
 
         // Get input
