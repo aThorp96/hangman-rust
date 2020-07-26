@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::process::Command;
 
 const ALPHABET: [char; 26] = [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
@@ -31,8 +32,21 @@ fn prompt(msg: &str) {
 }
 
 fn generate_word() -> String {
-    let word = String::from("SECRET");
-    return word;
+    let dict_file = "/usr/share/dict/american-english";
+    let o = Command::new("shuf")
+        .arg(dict_file)
+        .output()
+        .expect("failed")
+        .stdout;
+    let output = String::from_utf8(o).unwrap();
+    let words = output.split_ascii_whitespace();
+    for w in words {
+        // Skip words that contain a '
+        if !w.contains("'") {
+            return w.to_string();
+        }
+    }
+    return String::from("error");
 }
 
 fn solved_word(word: &String, guesses: [bool; 26]) -> bool {
@@ -59,7 +73,7 @@ fn print_exit_msg(solved: bool, secret: String, misses: u32) {
 }
 
 fn main() {
-    let secret = generate_word();
+    let secret = generate_word().to_uppercase();
     let max_misses = 10;
     let mut solved = false;
     let mut misses = 0;
