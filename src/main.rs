@@ -15,7 +15,7 @@ fn char_to_index(c: char) -> u8 {
     return i - 65;
 }
 
-fn guess_to_index(guess: String) -> u8 {
+fn guess_to_index(guess: &String) -> u8 {
     let c: char = match guess.trim().to_uppercase().parse() {
         Ok(ch) => ch,
         Err(_) => return INVALID_INPUT,
@@ -76,7 +76,7 @@ fn main() {
             .expect("Failed to read a line");
 
         // Verify input
-        let index = guess_to_index(guess.clone());
+        let index = guess_to_index(&guess);
         if index == INVALID_INPUT {
             println!("Please input a letter");
             continue;
