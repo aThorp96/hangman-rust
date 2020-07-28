@@ -1,12 +1,89 @@
 use std::io::{self, Write};
 use std::process::Command;
 
+use cursive::views::{Dialog, EditView};
+
 const ALPHABET: [char; 26] = [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
     't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 const BANNER: &str = "=======================";
 const INVALID_INPUT: u8 = 255;
+
+struct HangmanGame {
+    secret: String,
+    max_misses: u32,
+    prompt: String,
+    solved: bool,
+    misses: u32,
+    guesses: [bool; 26],
+}
+
+impl HangmanGame {
+    fn new_game() -> HangmanGame {
+        let mut game = HangmanGame {
+            secret: generate_word().to_uppercase(),
+            max_misses: 10,
+            solved: false,
+            misses: 0,
+            guesses: [false; 26],
+            prompt: String::new(),
+        };
+        return game;
+    }
+
+    fn solved_word(&self) -> bool {
+        for c in self.secret.chars() {
+            if !self.guesses[char_to_index(c) as usize] {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    fn exit_msg(&self) -> String {
+        if self.solved {
+            String::from(format!(
+                "🎉🎉 Congraulations! 🎉🎉\nYou solve the word '{}'!",
+                self.secret
+            ))
+        } else {
+            String::from(format!(
+                "Shoot..\nYou've exceeded {} guesses...\nBetter luck next time",
+                self.misses
+            ))
+        }
+    }
+
+    fn display(&mut self, msg: &str) {
+        self.prompt = String::from(msg)
+    }
+
+    fn enter_letter(&mut self, guess: String) {
+        let guess = guess.to_string();
+        let index = guess_to_index(&guess);
+        if index == INVALID_INPUT {
+            self.display("Please input a valid letter");
+            return;
+        }
+        let c = ALPHABET[index as usize];
+        self.display(&format!("You guessed '{}'", guess));
+
+        // React to guess based on state
+        if self.guesses[index as usize] {
+            self.display(&format!("You have already guessed '{}'", c));
+            return;
+        } else if self.secret.contains(&guess.to_uppercase()) {
+            self.display(&format!("'{}' is in the word!", c));
+        } else {
+            self.misses = self.misses + 1;
+            self.display(&format!("'{}' is not in the word", c));
+        }
+
+        // Update state
+        self.guesses[index as usize] = true;
+    }
+}
 
 fn char_to_index(c: char) -> u8 {
     let i = c as u8;
@@ -16,7 +93,7 @@ fn char_to_index(c: char) -> u8 {
     return i - 65;
 }
 
-fn guess_to_index(guess: &String) -> u8 {
+fn guess_to_index(guess: &str) -> u8 {
     let c: char = match guess.trim().to_uppercase().parse() {
         Ok(ch) => ch,
         Err(_) => return INVALID_INPUT,
@@ -25,100 +102,47 @@ fn guess_to_index(guess: &String) -> u8 {
 }
 
 fn prompt(msg: &str) {
-    let prompt = ">";
     println!("{}", BANNER);
-    print!("{} {}: ", prompt, msg);
+    print!("{} {}: ", ">", msg);
     io::stdout().flush().unwrap();
 }
 
 fn generate_word() -> String {
     let dict_file = "/usr/share/dict/american-english";
+
     let o = Command::new("shuf")
         .arg(dict_file)
         .output()
-        .expect("failed")
+        .expect("missing")
         .stdout;
     let output = String::from_utf8(o).unwrap();
-    let words = output.split_ascii_whitespace();
-    for w in words {
-        // Skip words that contain a '
+
+    for w in output.lines() {
+        // Skip words that contain an apostrophe
         if !w.contains("'") {
             return w.to_string();
         }
     }
-    return String::from("error");
+    return String::from("none");
 }
 
-fn solved_word(word: &String, guesses: [bool; 26]) -> bool {
-    for c in word.chars() {
-        if !guesses[char_to_index(c) as usize] {
-            return false;
-        }
-    }
-    return true;
-}
+fn build_ui() -> cursive::Cursive {
+    let mut ui = cursive::default();
+    let mut hangman = HangmanGame::new_game();
 
-fn print_exit_msg(solved: bool, secret: String, misses: u32) {
-    if solved {
-        println!(
-            "🎉🎉 Congraulations! 🎉🎉\nYou solve the word '{}'!",
-            secret
-        );
-    } else {
-        println!(
-            "Shoot..\nYou've exceeded {} guesses...\nBetter luck next time",
-            misses
-        );
-    }
+    let input_layer = EditView::new().on_submit(|_: &mut cursive::Cursive, guess: &str| {
+        hangman.enter_letter(String::from(guess));
+    });
+
+    ui.add_layer(
+        Dialog::around(input_layer)
+            .title("Hangman")
+            .button("Quit", |s| s.quit()),
+    );
+    return ui;
 }
 
 fn main() {
-    let secret = generate_word().to_uppercase();
-    let max_misses = 10;
-    let mut solved = false;
-    let mut misses = 0;
-    let mut guesses = [false; 26];
-    let mut guess = String::new();
-
-    while !solved && misses < max_misses {
-        guess.clear();
-        prompt("Guess any letter");
-
-        // Get input
-        io::stdin()
-            .read_line(&mut guess)
-            .expect("Failed to read a line");
-
-        // Verify input
-        let index = guess_to_index(&guess);
-        if index == INVALID_INPUT {
-            println!("Please input a letter");
-            continue;
-        }
-        let c = ALPHABET[index as usize];
-        println!("You guessed '{}'", guess.trim());
-
-        // React to guess based on state
-        if guesses[index as usize] {
-            println!("You have already guessed '{}'", c);
-            continue;
-        } else if secret.contains(guess.to_uppercase().trim()) {
-            println!("'{}' is in the word!", c);
-        } else {
-            misses = misses + 1;
-            println!("'{}' is not in the word", c);
-        }
-
-        // Update state
-        guesses[index as usize] = true;
-
-        // If not solved, print how many guesses are left
-        if solved_word(&secret, guesses) {
-            solved = true;
-        } else {
-            println!("You have {} misses left", max_misses - misses);
-        }
-    }
-
-    print_exit_msg(solved, secret, misses);
+    let mut ui = build_ui();
+    ui.run();
 }
