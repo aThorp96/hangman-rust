@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 cursive = "0.15"
+unicode-width = "0.1.8"

@@ -1,7 +1,10 @@
 use std::io::{self, Write};
 use std::process::Command;
+use unicode_width::UnicodeWidthStr;
 
-use cursive::views::{Dialog, EditView};
+use cursive::traits::*;
+use cursive::views::{Canvas, Dialog, EditView, LinearLayout, Panel, TextView};
+use cursive::Printer;
 
 const ALPHABET: [char; 26] = [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
@@ -9,6 +12,7 @@ const ALPHABET: [char; 26] = [
 ];
 const BANNER: &str = "=======================";
 const INVALID_INPUT: u8 = 255;
+const HANGMAN: &str = " ╔═══╗\n ║\n ║\n ║\n═╩══";
 
 struct HangmanGame {
     secret: String,
@@ -17,6 +21,7 @@ struct HangmanGame {
     solved: bool,
     misses: u32,
     guesses: [bool; 26],
+    canvas: String,
 }
 
 impl HangmanGame {
@@ -28,6 +33,7 @@ impl HangmanGame {
             misses: 0,
             guesses: [false; 26],
             prompt: String::new(),
+            canvas: String::new(),
         };
         return game;
     }
@@ -83,6 +89,11 @@ impl HangmanGame {
         // Update state
         self.guesses[index as usize] = true;
     }
+
+    fn update_canvas(&self, state: &mut String) {
+        state.clear();
+        state.insert_str(0, "Hello!");
+    }
 }
 
 fn char_to_index(c: char) -> u8 {
@@ -128,15 +139,39 @@ fn generate_word() -> String {
 
 fn build_ui() -> cursive::Cursive {
     let mut ui = cursive::default();
-    let mut hangman = HangmanGame::new_game();
+    let mut game = HangmanGame::new_game();
 
-    let input_layer = EditView::new().on_submit(|_: &mut cursive::Cursive, guess: &str| {
-        hangman.enter_letter(String::from(guess));
-    });
+    //let canvas_state = &mut game.canvas
+    ui.set_user_data(game);
+
+    let mut input_view = EditView::new()
+        // Update game state
+        .on_submit(|s: &mut cursive::Cursive, guess: &str| {
+            s.with_user_data(|game: &mut HangmanGame| {
+                game.enter_letter(String::from(guess));
+            });
+        })
+        // Clear input
+        .on_submit(|s: &mut cursive::Cursive, _: &str| {
+            s.call_on_name("input", |view: &mut EditView| view.set_content(""));
+        })
+        .with_name("input");
+
+    let canvas_state = String::from(HANGMAN);
+    let mut hangman_view = Canvas::new(canvas_state)
+        .with_required_size(|text, _constraints| (text.width(), 7).into())
+        .with_name("canvas");
+    let mut letters_store = Panel::new(TextView::new("alphabet here").with_name("letter_store"));
 
     ui.add_layer(
-        Dialog::around(input_layer)
+        Dialog::new()
             .title("Hangman")
+            .content(
+                LinearLayout::vertical()
+                    .child(hangman_view)
+                    .child(input_view)
+                    .child(letters_store),
+            )
             .button("Quit", |s| s.quit()),
     );
     return ui;
