@@ -12,14 +12,21 @@ const ALPHABET: [char; 26] = [
 ];
 const BANNER: &str = "=======================";
 const INVALID_INPUT: u8 = 255;
-const HANGMAN: &str = " ╔═══╗\n ║\n ║\n ║\n═╩══";
+const HANGMAN: [&str; 7] = [
+" ╔═══╗\n ║      \n ║      \n ║       \n═╩══",
+" ╔═══╗\n ║   0   \n ║      \n ║       \n═╩══",
+" ╔═══╗\n ║   0   \n ║   |   \n ║       \n═╩══",
+" ╔═══╗\n ║   0   \n ║  /|   \n ║       \n═╩══",
+" ╔═══╗\n ║   0   \n ║  /|\\  \n ║       \n═╩══",
+" ╔═══╗\n ║   0   \n ║  /|\\  \n ║  /    \n═╩══",
+" ╔═══╗\n ║   0   \n ║  /|\\  \n ║  / \\  \n═╩══"];
 
 struct HangmanGame {
     secret: String,
     max_misses: u32,
     prompt: String,
     solved: bool,
-    misses: u32,
+    misses: usize,
     guesses: [bool; 26],
     canvas: String,
 }
@@ -88,11 +95,8 @@ impl HangmanGame {
 
         // Update state
         self.guesses[index as usize] = true;
-    }
-
-    fn update_canvas(&self, state: &mut String) {
-        state.clear();
-        state.insert_str(0, "Hello!");
+        self.canvas = String::from(HANGMAN[self.misses]);
+        println!("Misses: {}", self.misses);
     }
 }
 
@@ -145,22 +149,51 @@ fn build_ui() -> cursive::Cursive {
     ui.set_user_data(game);
 
     let mut input_view = EditView::new()
-        // Update game state
         .on_submit(|s: &mut cursive::Cursive, guess: &str| {
+            // Update game state
             s.with_user_data(|game: &mut HangmanGame| {
                 game.enter_letter(String::from(guess));
             });
-        })
-        // Clear input
-        .on_submit(|s: &mut cursive::Cursive, _: &str| {
+
+            // Clear input field
             s.call_on_name("input", |view: &mut EditView| view.set_content(""));
+
+            // Update Canvas
+			let mut misses: usize = 0;
+            let d: Option<&mut HangmanGame> = s.user_data();
+			if let Some(g) = d {
+                misses = g.misses;
+            };
+            s.call_on_name(
+                "canvas",
+                |view: &mut Canvas<String>| {
+                    view.set_draw(move |_, printer| {
+            			let mut state = String::from(HANGMAN[misses]);
+                        let mut lines = state.lines();
+                        let mut i = 0;
+                        for l in lines {
+                            printer.print((2,i),l);
+                            i = i + 1;
+                        }
+                    })
+                }
+            );
         })
         .with_name("input");
 
-    let canvas_state = String::from(HANGMAN);
+    let canvas_state = String::from(HANGMAN[0]);
     let mut hangman_view = Canvas::new(canvas_state)
+        .with_draw(|state, printer| {
+            let mut lines = state.lines();
+            let mut i = 0;
+            for l in lines {
+                printer.print((2,i),l);
+                i = i + 1;
+            }
+        })
         .with_required_size(|text, _constraints| (text.width(), 7).into())
         .with_name("canvas");
+
     let mut letters_store = Panel::new(TextView::new("alphabet here").with_name("letter_store"));
 
     ui.add_layer(
