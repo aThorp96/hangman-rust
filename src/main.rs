@@ -13,13 +13,16 @@ const ALPHABET: [char; 26] = [
 const BANNER: &str = "=======================";
 const INVALID_INPUT: u8 = 255;
 const HANGMAN: [&str; 7] = [
-" ╔═══╗\n ║      \n ║      \n ║       \n═╩══",
-" ╔═══╗\n ║   0   \n ║      \n ║       \n═╩══",
-" ╔═══╗\n ║   0   \n ║   |   \n ║       \n═╩══",
-" ╔═══╗\n ║   0   \n ║  /|   \n ║       \n═╩══",
-" ╔═══╗\n ║   0   \n ║  /|\\  \n ║       \n═╩══",
-" ╔═══╗\n ║   0   \n ║  /|\\  \n ║  /    \n═╩══",
-" ╔═══╗\n ║   0   \n ║  /|\\  \n ║  / \\  \n═╩══"];
+    " ╔═══╗\n ║    \n ║\n ║\n═╩══",
+    " ╔═══╗\n ║   O\n ║\n ║\n═╩══",
+    " ╔═══╗\n ║   O\n ║   |\n ║\n═╩══",
+    " ╔═══╗\n ║   O\n ║  /|\n ║\n═╩══",
+    " ╔═══╗\n ║   O\n ║  /|\\\n ║\n═╩══",
+    " ╔═══╗\n ║   O\n ║  /|\\\n ║  /\n═╩══",
+    " ╔═══╗\n ║   O\n ║  /|\\\n ║  / \\\n═╩══",
+];
+const MAX_MISSES: usize = 6;
+const CENTER_OFFSET: i32 = 10;
 
 struct HangmanGame {
     secret: String,
@@ -29,6 +32,7 @@ struct HangmanGame {
     misses: usize,
     guesses: [bool; 26],
     canvas: String,
+    lost: bool,
 }
 
 impl HangmanGame {
@@ -41,6 +45,7 @@ impl HangmanGame {
             guesses: [false; 26],
             prompt: String::new(),
             canvas: String::new(),
+            lost: false,
         };
         return game;
     }
@@ -72,6 +77,18 @@ impl HangmanGame {
         self.prompt = String::from(msg)
     }
 
+    fn letter_store(&self) -> String {
+        let mut store = String::new();
+        for (i, guessed) in self.guesses.iter().enumerate() {
+            if *guessed {
+                store.push(ALPHABET[i as usize]);
+            } else {
+                store.push(' ');
+            }
+        }
+        return store;
+    }
+
     fn enter_letter(&mut self, guess: String) {
         let guess = guess.to_string();
         let index = guess_to_index(&guess);
@@ -88,15 +105,18 @@ impl HangmanGame {
             return;
         } else if self.secret.contains(&guess.to_uppercase()) {
             self.display(&format!("'{}' is in the word!", c));
-        } else {
+        } else if self.misses < MAX_MISSES {
             self.misses = self.misses + 1;
             self.display(&format!("'{}' is not in the word", c));
+        } else {
+            self.misses = self.misses + 1; // For propper hangman indexing
+            self.lost = true;
+            println!("Lost");
         }
 
         // Update state
         self.guesses[index as usize] = true;
         self.canvas = String::from(HANGMAN[self.misses]);
-        println!("Misses: {}", self.misses);
     }
 }
 
@@ -128,7 +148,7 @@ fn generate_word() -> String {
     let o = Command::new("shuf")
         .arg(dict_file)
         .output()
-        .expect("missing")
+        .expect("error")
         .stdout;
     let output = String::from_utf8(o).unwrap();
 
@@ -159,25 +179,27 @@ fn build_ui() -> cursive::Cursive {
             s.call_on_name("input", |view: &mut EditView| view.set_content(""));
 
             // Update Canvas
-			let mut misses: usize = 0;
+            let mut misses: usize = 0;
+            let mut store = String::new();
             let d: Option<&mut HangmanGame> = s.user_data();
-			if let Some(g) = d {
+            if let Some(g) = d {
                 misses = g.misses;
+                store = g.letter_store();
             };
-            s.call_on_name(
-                "canvas",
-                |view: &mut Canvas<String>| {
-                    view.set_draw(move |_, printer| {
-            			let mut state = String::from(HANGMAN[misses]);
-                        let mut lines = state.lines();
-                        let mut i = 0;
-                        for l in lines {
-                            printer.print((2,i),l);
-                            i = i + 1;
-                        }
-                    })
-                }
-            );
+            s.call_on_name("canvas", |view: &mut Canvas<String>| {
+                view.set_draw(move |_, printer| {
+                    let mut state = String::from(HANGMAN[misses]);
+                    let mut lines = state.lines();
+                    let mut i = 0;
+                    for l in lines {
+                        printer.print((CENTER_OFFSET, i), l);
+                        i = i + 1;
+                    }
+                })
+            });
+            s.call_on_name("letter_store", |view: &mut TextView| {
+                view.set_content(store.clone());
+            });
         })
         .with_name("input");
 
@@ -187,14 +209,16 @@ fn build_ui() -> cursive::Cursive {
             let mut lines = state.lines();
             let mut i = 0;
             for l in lines {
-                printer.print((2,i),l);
+                printer.print((CENTER_OFFSET, i), l);
                 i = i + 1;
             }
         })
         .with_required_size(|text, _constraints| (text.width(), 7).into())
         .with_name("canvas");
 
-    let mut letters_store = Panel::new(TextView::new("alphabet here").with_name("letter_store"));
+    let mut letter_store =
+        Panel::new(TextView::new("                          ").with_name("letter_store"))
+            .title("Guesses");
 
     ui.add_layer(
         Dialog::new()
@@ -203,7 +227,7 @@ fn build_ui() -> cursive::Cursive {
                 LinearLayout::vertical()
                     .child(hangman_view)
                     .child(input_view)
-                    .child(letters_store),
+                    .child(letter_store),
             )
             .button("Quit", |s| s.quit()),
     );
