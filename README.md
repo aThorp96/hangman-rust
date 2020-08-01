@@ -1,6 +1,6 @@
 # Hangman 
 
-A simple hangman TUI to teahc myself Rust.
+A simple hangman TUI to teach myself Rust.
 
 ## Run
 To compile, first make sure you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed.
