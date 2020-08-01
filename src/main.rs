@@ -155,9 +155,18 @@ fn game_over(s: &mut cursive::Cursive, result: GameState) {
     // Get end message
     let message = match result {
         GameState::Won => "Congratulations! You won!",
-        GameState::Lost => "Better luck next time :(",
+        GameState::Lost => "You lost! Better luck next time :(",
         _ => "Something has gone terribly wrong...",
     };
+
+    let mut word = String::new();
+    let d: Option<&mut HangmanGame> = s.user_data();
+    if let Some(g) = d {
+        word = g.secret.clone();
+    };
+
+    let message_view = TextView::new(message).h_align(HAlign::Center);
+    let word_view = Panel::new(TextView::new(word).h_align(HAlign::Center)).title("Solution");
 
     s.pop_layer();
     s.add_layer(
@@ -165,8 +174,8 @@ fn game_over(s: &mut cursive::Cursive, result: GameState) {
             .title("Hangman")
             .content(
                 LinearLayout::vertical()
-                    .child(TextView::new(message).h_align(HAlign::Center))
-                    .child(TextView::new("").h_align(HAlign::Center)),
+                    .child(word_view)
+                    .child(message_view),
             )
             .button("Quit", |s| s.quit()),
     );
@@ -247,7 +256,7 @@ fn build_ui() -> cursive::Cursive {
 
     ui.add_layer(
         Dialog::new()
-            .title("Hangman")
+            .title("Hangman!")
             .content(
                 LinearLayout::vertical()
                     .child(hangman_view)
